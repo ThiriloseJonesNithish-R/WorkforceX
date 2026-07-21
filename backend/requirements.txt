@@ -1,0 +1,10 @@
+flask
+flask-cors
+pymongo
+pandas
+numpy
+pdfplumber
+scikit-learn
+pyjwt
+bcrypt
+openpyxl
