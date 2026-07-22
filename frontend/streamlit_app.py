@@ -83,6 +83,75 @@ def main():
             show_analytics_page()
         elif choice == "📄 Reports Exporter":
             show_reports_page()
+            
+        # Render global context-aware chatbot widget
+        show_chatbot_widget()
+
+def show_chatbot_widget():
+    from frontend.api.client import send_chatbot_message_api
+    
+    # 1. Floating popover container
+    with st.popover("💬 AI Assistant", key="global_chat_assistant_popover"):
+        st.markdown("<div style='font-size:18px; font-weight:700; color:#818cf8;'>🤖 WorkForceX Assistant</div>", unsafe_allow_html=True)
+        role_title = "Recruiter Assistant" if st.session_state.get("role") == "organization" else "Career Coach"
+        st.caption(f"{role_title} | Context-Aware Guidance")
+        st.write("---")
+        
+        # 2. Chat history initialization
+        if "chat_history" not in st.session_state:
+            st.session_state["chat_history"] = []
+            
+        # 3. Render previous messages in a clean layout
+        chat_container = st.container(height=280)
+        with chat_container:
+            # Permanent welcome message at the top
+            welcome_msg = (
+                f"Hi **{st.session_state.get('name', 'User')}**! I am your AI assistant on the "
+                f"**{st.session_state.get('role', '').capitalize()} Portal**.\n\n"
+                "Ask me how to use features, where to find options, or questions about the active dashboard."
+            )
+            st.chat_message("assistant").write(welcome_msg)
+            
+            for msg in st.session_state["chat_history"]:
+                if msg["role"] == "user":
+                    st.chat_message("user").write(msg["content"])
+                else:
+                    st.chat_message("assistant").write(msg["content"])
+                        
+        # 4. User Chat Input
+        user_input = st.chat_input("Ask about this page...", key="chat_user_input_field")
+        if user_input:
+            # Append user message
+            st.session_state["chat_history"].append({"role": "user", "content": user_input})
+            st.rerun()
+
+        # Handle message response if user message is pending
+        if st.session_state["chat_history"] and st.session_state["chat_history"][-1]["role"] == "user":
+            user_message = st.session_state["chat_history"][-1]["content"]
+            current_choice = st.query_params.get("menu_choice", "Dashboard")
+            
+            # Show inline helper typing status inside popover body
+            with chat_container:
+                st.chat_message("user").write(user_message)
+                status_placeholder = st.empty()
+                status_placeholder.markdown("🤖 *Thinking...*")
+                
+                # Fetch response from backend
+                res, stat = send_chatbot_message_api(
+                    message=user_message,
+                    current_tab=current_choice,
+                    chat_history=st.session_state["chat_history"][:-1]
+                )
+                status_placeholder.empty()
+                
+            if stat == 200:
+                ai_response = res.get("response", "No response generated.")
+            else:
+                ai_response = f"I'm offline: {res.get('error', 'API connection failed.')}"
+                
+            # Append AI response
+            st.session_state["chat_history"].append({"role": "assistant", "content": ai_response})
+            st.rerun()
 
 if __name__ == "__main__":
     main()

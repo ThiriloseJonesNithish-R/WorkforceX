@@ -202,3 +202,15 @@ def mark_notifications_read_api():
         return res.json(), res.status_code
     except Exception as e:
         return {"error": f"Connection error: {str(e)}"}, 500
+
+def send_chatbot_message_api(message, current_tab="", chat_history=None):
+    try:
+        payload = {
+            "message": message,
+            "current_tab": current_tab,
+            "chat_history": chat_history or []
+        }
+        res = requests.post(f"{API_URL}/chatbot", json=payload, headers=get_headers())
+        return res.json(), res.status_code
+    except Exception as e:
+        return {"error": f"Connection error: {str(e)}"}, 500

@@ -5,12 +5,33 @@ from datetime import datetime
 import hashlib
 import bcrypt
 
+def load_env():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    while True:
+        env_path = os.path.join(current_dir, ".env")
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        os.environ[k.strip()] = v.strip()
+            break
+        parent = os.path.dirname(current_dir)
+        if parent == current_dir:
+            break
+        current_dir = parent
+
+load_env()
+
 def hash_password(password: str) -> str:
     salt = bcrypt.gensalt()
     return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
 def load_data():
-    client = pymongo.MongoClient(os.environ.get("MONGO_URI", "mongodb+srv://sowndi_gowri:sowndi_gowri@unicorn.vduucnx.mongodb.net/?appName=Unicorn"))
+    client = pymongo.MongoClient(os.environ.get("MONGO_URI"))
     db = client["WorkForceX"]
     
     # 1. Clear existing collections

@@ -7,6 +7,27 @@ import webbrowser
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+def load_env():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    while True:
+        env_path = os.path.join(current_dir, ".env")
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        os.environ[k.strip()] = v.strip()
+            break
+        parent = os.path.dirname(current_dir)
+        if parent == current_dir:
+            break
+        current_dir = parent
+
+load_env()
+
 def is_port_open(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('127.0.0.1', port)) == 0
@@ -20,7 +41,7 @@ def run_all():
     
     # 1. Database Connection & Seeding Check
     print("\n[Database] Connecting to MongoDB...")
-    mongo_uri = os.environ.get("MONGO_URI", "mongodb+srv://sowndi_gowri:sowndi_gowri@unicorn.vduucnx.mongodb.net/?appName=Unicorn")
+    mongo_uri = os.environ.get("MONGO_URI")
     connected = False
     
     try:

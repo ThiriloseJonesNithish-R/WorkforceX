@@ -196,9 +196,17 @@ def get_project_matches(project_id):
     matches = get_top_matched_candidates(project, target_role_id=role_id)
     
     # Enrich matches with candidate basic profile details
+    candidate_emails = [m["candidate_email"] for m in matches]
+    
+    cands_list = list(db["professionals"].find({"email": {"$in": candidate_emails}}))
+    cands_by_email = {c["email"]: c for c in cands_list}
+    
+    scores_list = list(db["resume_scores"].find({"candidate_email": {"$in": candidate_emails}}))
+    scores_by_email = {s["candidate_email"]: s for s in scores_list}
+    
     enriched_matches = []
     for m in matches:
-        cand = db["professionals"].find_one({"email": m["candidate_email"]})
+        cand = cands_by_email.get(m["candidate_email"])
         if cand:
             m["source"] = cand.get("source", m.get("source", "Registered"))
             m["username"] = cand.get("username")
@@ -214,7 +222,7 @@ def get_project_matches(project_id):
             m["domain"] = cand.get("domain", "")
             m["career_objective"] = cand.get("career_objective", "To leverage my skills in domain execution, software quality, and cloud architectures to support rapid scaling.")
             
-            scores = db["resume_scores"].find_one({"candidate_email": cand["email"]})
+            scores = scores_by_email.get(cand["email"])
             if scores:
                 m["strengths"] = scores.get("strengths", [])
                 m["weaknesses"] = scores.get("weaknesses", [])

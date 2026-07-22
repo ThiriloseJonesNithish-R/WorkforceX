@@ -11,6 +11,7 @@ from backend.routes.profile_routes import profile_bp
 from backend.routes.assessment_routes import assessment_bp
 from backend.routes.project_routes import project_bp
 from backend.routes.analytics_routes import analytics_bp
+from backend.routes.chatbot_routes import chatbot_bp
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -24,6 +25,7 @@ app.register_blueprint(profile_bp, url_prefix="/api/profile")
 app.register_blueprint(assessment_bp, url_prefix="/api/assessment")
 app.register_blueprint(project_bp, url_prefix="/api/project")
 app.register_blueprint(analytics_bp, url_prefix="/api/analytics")
+app.register_blueprint(chatbot_bp, url_prefix="/api/chatbot")
 
 @app.route("/", methods=["GET"])
 @app.route("/api", methods=["GET"])
