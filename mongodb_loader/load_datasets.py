@@ -10,7 +10,7 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
 def load_data():
-    client = pymongo.MongoClient(os.environ.get("MONGO_URI", "mongodb+srv://sowndi_gowri:sowndi_gowri@unicorn.vduucnx.mongodb.net/?appName=Unicorn"))
+    client = pymongo.MongoClient(os.environ.get("MONGO_URI", "<YOUR MONGO DB URL>"))
     db = client["WorkForceX"]
     
     # 1. Clear existing collections
