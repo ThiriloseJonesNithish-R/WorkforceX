@@ -5,6 +5,7 @@ from frontend.api.client import (
     create_project_api,
     get_project_matches_api,
     invite_candidate_api,
+    reject_candidate_api,
     hire_candidate_api,
     get_invitations_api,
     get_skills_api,
@@ -88,7 +89,30 @@ def show_organization_dashboard():
             
             with col_p2:
                 st.markdown(f"### 🤖 Top AI Matched Candidates")
-                matches, m_status = get_project_matches_api(selected_proj["_id"])
+                
+                # Check if project has multi-role breakdown
+                proj_roles = selected_proj.get("roles", [])
+                active_role_id = None
+                active_role_title = selected_proj.get("role")
+                
+                if proj_roles and len(proj_roles) > 1:
+                    st.markdown("#### 👥 Select Role Slot to Match Candidates:")
+                    role_options = [f"{r.get('title', 'Role')} ({r.get('hired_count', 0)}/{r.get('count', 1)} filled)" for r in proj_roles]
+                    selected_r_idx = st.radio(
+                        "Role Slot",
+                        range(len(role_options)),
+                        format_func=lambda i: role_options[i],
+                        key=f"role_selector_{selected_proj['_id']}",
+                        horizontal=True
+                    )
+                    active_role_id = proj_roles[selected_r_idx].get("role_id")
+                    active_role_title = proj_roles[selected_r_idx].get("title")
+                    st.info(f"Matching candidates specifically for role: **{active_role_title}** ({proj_roles[selected_r_idx].get('experience', 0)}+ Yrs Exp | Skills: {', '.join(proj_roles[selected_r_idx].get('primary_skills', []))})")
+                elif proj_roles:
+                    active_role_id = proj_roles[0].get("role_id")
+                    active_role_title = proj_roles[0].get("title", selected_proj.get("role"))
+
+                matches, m_status = get_project_matches_api(selected_proj["_id"], role_id=active_role_id)
                 
                 if m_status == 200 and matches:
                     # Fetch all invitations for project to check invitation states
@@ -241,14 +265,26 @@ def show_organization_dashboard():
                         st.subheader("⚡ ATS Action Center")
                         
                         if not cand_invite:
-                            # Status = Deployment Ready -> Send Invitation
-                            if st.button("📧 Send Invitation", key=f"ats_invite_btn_{proj['_id']}", use_container_width=True):
-                                res, stat = invite_candidate_api(proj["_id"], cand["candidate_email"])
-                                if stat == 200:
-                                    st.success("Invitation sent successfully!")
-                                    st.rerun()
-                                else:
-                                    st.error(res.get("error"))
+                            # Status = Deployment Ready -> Send Invitation or Pass/Reject
+                            col_ats1, col_ats2 = st.columns(2)
+                            with col_ats1:
+                                if st.button("📧 Send Invitation", key=f"ats_invite_btn_{proj['_id']}", use_container_width=True):
+                                    res, stat = invite_candidate_api(proj["_id"], cand["candidate_email"], role_id=active_role_id)
+                                    if stat == 200:
+                                        st.success("Invitation sent successfully!")
+                                        st.rerun()
+                                    else:
+                                        st.error(res.get("error"))
+                            with col_ats2:
+                                if st.button("❌ Pass / Reject Candidate", key=f"ats_reject_btn_{proj['_id']}", use_container_width=True):
+                                    res, stat = reject_candidate_api(proj["_id"], cand["candidate_email"], role_id=active_role_id)
+                                    if stat == 200:
+                                        st.info("Candidate passed. Next top candidate matched!")
+                                        st.session_state["viewing_candidate"] = None
+                                        st.session_state["viewing_candidate_project"] = None
+                                        st.rerun()
+                                    else:
+                                        st.error(res.get("error"))
                         else:
                             invite_status = cand_invite.get("status")
                             
@@ -260,7 +296,7 @@ def show_organization_dashboard():
                                 # Status = Accepted -> Show Hire Candidate button
                                 st.success("🎉 Candidate Accepted Invitation!")
                                 if st.button("🤝 Hire Candidate", key=f"ats_hire_btn_{proj['_id']}", use_container_width=True):
-                                    res, stat = hire_candidate_api(proj["_id"], cand["candidate_email"])
+                                    res, stat = hire_candidate_api(proj["_id"], cand["candidate_email"], role_id=active_role_id)
                                     if stat == 200:
                                         st.balloons()
                                         st.success("✔ Candidate Hired")
@@ -291,7 +327,6 @@ def show_organization_dashboard():
                             score = cand["match_score"]
                             cand_invite = next((i for i in proj_invites if i["candidate_email"] == cand["candidate_email"]), None)
                             
-                            # Determine current invitation status label for row display
                             status_label = "Deployment Ready"
                             if cand_invite:
                                 invite_status = cand_invite.get("status")
@@ -309,37 +344,32 @@ def show_organization_dashboard():
                             src_badge = "Registered Candidate" if is_registered_cand else "Database Candidate"
                             src_color = "#059669" if is_registered_cand else "#3b82f6"
 
-                            # Candidate Card Row
                             st.markdown(f"""
                                 <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 15px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
                                     <div>
                                         <b style="color: white; font-size: 15px;">{cand['candidate_name']}</b>
                                         <span style="background-color: {src_color}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; margin-left: 8px;">{src_badge}</span>
-                                        <div style="font-size: 12px; color: #9ca3af; margin-top: 4px;">AI Match: <b>{score}%</b> | Status: <b>{status_label}</b></div>
+                                        <div style="font-size: 12px; color: #9ca3af; margin-top: 4px;">AI Match for <b>{active_role_title}</b>: <b>{score}%</b> | Status: <b>{status_label}</b></div>
                                     </div>
                                 </div>
                             """, unsafe_allow_html=True)
                             
-                            # Action buttons
-                            col_act1, col_act2 = st.columns(2)
-                            with col_act1:
-                                if st.button(f"🔍 View Candidate Profile", key=f"view_profile_{idx}_{cand['candidate_email']}", use_container_width=True):
-                                    st.session_state["viewing_candidate"] = cand
-                                    st.session_state["viewing_candidate_project"] = selected_proj
-                                    st.rerun()
-                            with col_act2:
-                                if status_label == "Invitation Accepted":
-                                    if st.button("🤝 Hire Candidate", key=f"quick_hire_{idx}_{cand['candidate_email']}", use_container_width=True):
-                                        res, stat = hire_candidate_api(selected_proj["_id"], cand["candidate_email"])
-                                        if stat == 200:
-                                            st.balloons()
-                                            st.success("✔ Candidate Hired")
-                                            st.rerun()
-                                        else:
-                                            st.error(res.get("error"))
+                            if st.button(f"🔍 View Candidate Profile", key=f"view_profile_{idx}_{cand['candidate_email']}", use_container_width=True):
+                                st.session_state["viewing_candidate"] = cand
+                                st.session_state["viewing_candidate_project"] = selected_proj
+                                st.rerun()
                             st.write("")
                 else:
-                    st.write("No 'Deployment Ready' candidates match your project requirements. Make sure candidates have completed and passed their assessments.")
+                    active_role_dict = next((r for r in proj_roles if r.get("role_id") == active_role_id), None) if proj_roles else None
+                    role_is_filled = bool(active_role_dict and active_role_dict.get("hired_count", 0) >= active_role_dict.get("count", 1))
+                    proj_is_filled = bool(selected_proj.get("hired_count", 0) >= selected_proj.get("resources_needed", 1) or selected_proj.get("status") == "Project Active")
+                    
+                    if proj_is_filled:
+                        st.success("🎉 All staffing positions for this project are fully filled and the project is active!")
+                    elif role_is_filled:
+                        st.success(f"🎉 All required staff for '{active_role_title}' have been hired!")
+                    else:
+                        st.info("No candidates match your project requirements for this role. Make sure candidates have completed and passed their assessments.")
         else:
             st.info("No active projects found. Navigate to the 'Create New Project' tab to launch a project.")
             
@@ -353,50 +383,89 @@ def show_organization_dashboard():
             db_skills = ["Python", "SQL", "Machine Learning", "Deep Learning", "Power BI", "Cybersecurity", "Java", "C++", "Docker", "AWS", "Git"]
             
         proj_name = st.text_input("Project Name *", key="new_proj_name")
-        client = st.text_input("Client Client Name", key="new_proj_client")
+        client = st.text_input("Client Name", key="new_proj_client")
         dept = st.text_input("Department / Business Unit", key="new_proj_dept")
-        role = st.text_input("Job Role * (e.g. Data Scientist, AI Engineer)", key="new_proj_role")
-        desc = st.text_area("Job Description", key="new_proj_desc")
+        desc = st.text_area("Overall Project Description", key="new_proj_desc")
         
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            exp_req = st.selectbox("Required Experience (Min Years)", [str(i) for i in range(11)], key="new_proj_exp")
-            primary_skills = st.multiselect("Primary Required Skills", db_skills, key="new_proj_pskills")
-            secondary_skills = st.multiselect("Secondary Skills", db_skills, key="new_proj_sskills")
-            certifications = st.multiselect("Required Certifications", ["AWS Certified", "Google Cloud", "Microsoft Certified", "Azure", "PMP", "CISSP", "CEH", "Google ML", "Deep Learning Specialization"], key="new_proj_certs")
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
             budget = st.text_input("Budget (e.g., $100K or Not Disclosed)", key="new_proj_budget")
-            
-        with col_f2:
             duration = st.text_input("Project Duration (e.g., 6 Months, 1 Year)", key="new_proj_duration")
             joining_date = st.date_input("Target Joining Date", value=datetime.today(), key="new_proj_joining")
+        with col_g2:
             priority = st.selectbox("Priority Level", PRIORITIES, index=1, key="new_proj_priority")
-            resources = st.number_input("Resources Needed (Staff Count) *", min_value=1, max_value=20, value=1, key="new_proj_resources")
             work_mode = st.selectbox("Work Mode", WORK_MODES, key="new_proj_work_mode")
+
+        st.markdown("---")
+        st.markdown("### 👥 Multi-Role Staffing Breakdown")
+        st.caption("Specify the different job roles required for this project, along with individual headcount and skill requirements.")
+        
+        if "role_builder_count" not in st.session_state:
+            st.session_state["role_builder_count"] = 1
             
+        roles_payload = []
+        total_resources_count = 0
+        
+        col_btn1, col_btn2 = st.columns([1, 1])
+        with col_btn1:
+            if st.button("➕ Add Another Role Slot"):
+                st.session_state["role_builder_count"] += 1
+                st.rerun()
+        with col_btn2:
+            if st.session_state["role_builder_count"] > 1:
+                if st.button("🗑️ Remove Last Role Slot"):
+                    st.session_state["role_builder_count"] -= 1
+                    st.rerun()
+                    
+        for r_i in range(st.session_state["role_builder_count"]):
+            st.markdown(f"#### 🔹 Role #{r_i+1} Definition")
+            r_title = st.text_input(f"Role Title #{r_i+1} * (e.g., UI Developer, Backend Engineer)", key=f"role_title_{r_i}")
+            
+            c_r1, c_r2 = st.columns(2)
+            with c_r1:
+                r_count = st.number_input(f"Staff Count Needed for Role #{r_i+1} *", min_value=1, max_value=20, value=1, key=f"role_count_{r_i}")
+                r_exp = st.selectbox(f"Required Experience for Role #{r_i+1} (Min Years)", [str(i) for i in range(11)], key=f"role_exp_{r_i}")
+                r_pskills = st.multiselect(f"Primary Required Skills (Role #{r_i+1})", db_skills, key=f"role_pskills_{r_i}")
+            with c_r2:
+                r_sskills = st.multiselect(f"Secondary Skills (Role #{r_i+1})", db_skills, key=f"role_sskills_{r_i}")
+                r_certs = st.multiselect(f"Required Certifications (Role #{r_i+1})", ["AWS Certified", "Google Cloud", "Microsoft Certified", "Azure", "PMP", "CISSP", "CEH", "Google ML", "Deep Learning Specialization"], key=f"role_certs_{r_i}")
+                r_jd = st.text_area(f"Job Description / Requirements (Role #{r_i+1})", key=f"role_jd_{r_i}")
+                
+            total_resources_count += int(r_count)
+            roles_payload.append({
+                "role_id": f"role_{r_i+1}",
+                "title": r_title.strip(),
+                "count": int(r_count),
+                "experience": int(r_exp),
+                "primary_skills": r_pskills,
+                "secondary_skills": r_sskills,
+                "certifications": r_certs,
+                "job_description": r_jd.strip()
+            })
+            st.markdown("---")
+            
+        st.markdown(f"**Total Project Headcount Needed:** `{total_resources_count} Members` across {len(roles_payload)} role slots.")
+        
         if st.button("Launch Project & Run Matcher", use_container_width=True):
-            if not proj_name or not role:
-                st.error("Project Name and Role are required fields.")
+            missing_roles = [r for r in roles_payload if not r["title"]]
+            if not proj_name or missing_roles:
+                st.error("Project Name and all Role Titles are required fields.")
             else:
                 data = {
                     "name": proj_name,
                     "client": client,
                     "department": dept,
-                    "role": role,
                     "job_description": desc,
-                    "experience": int(exp_req),
-                    "primary_skills": primary_skills,
-                    "secondary_skills": secondary_skills,
-                    "certifications": certifications,
                     "budget": budget,
                     "duration": duration,
                     "joining_date": joining_date.strftime("%Y-%m-%d"),
                     "priority": priority,
-                    "resources_needed": int(resources),
-                    "work_mode": work_mode
+                    "work_mode": work_mode,
+                    "roles": roles_payload
                 }
                 res, status = create_project_api(data)
                 if status == 201:
-                    st.success("Project launched successfully! Redirecting to matcher...")
+                    st.success("Multi-role project launched successfully! Redirecting to AI matcher...")
                     st.rerun()
                 else:
                     st.error(res.get("error", "Error creating project."))

@@ -9,6 +9,10 @@ __pycache__/
 .coverage
 htmlcov/
 
+# Test files and development validation scripts
+backend/tests/
+backend/scripts/
+
 # Virtual environments
 .venv/
 venv/

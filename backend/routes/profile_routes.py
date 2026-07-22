@@ -203,5 +203,16 @@ def get_resume_insights():
 def get_skills():
     db = Database.get_db()
     skills_docs = list(db["skills"].find({}, {"name": 1}))
-    skills_list = sorted([s["name"] for s in skills_docs])
-    return jsonify({"skills": skills_list})
+    db_skills = [s["name"] for s in skills_docs if "name" in s]
+    
+    # Aggregate skills from professionals collection
+    prof_skills = db["professionals"].distinct("skills")
+    
+    default_skills = [
+        "Python", "SQL", "Machine Learning", "Deep Learning", "Power BI", 
+        "Cybersecurity", "Java", "C++", "Docker", "AWS", "Git", "Html5", 
+        "Css", "Figma Tool", "JavaScript", "React", "TypeScript", "UI/UX Design"
+    ]
+    
+    combined_skills = sorted(list(set(db_skills + prof_skills + default_skills)))
+    return jsonify({"skills": combined_skills})

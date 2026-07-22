@@ -220,43 +220,55 @@ def show_professional_dashboard():
                 * **IBM Python for Data Science and AI** (Coursera) — [Link](https://www.coursera.org/learn/python-for-applied-data-science-ai)
                 * **Microsoft Certified: Azure Data Scientist Associate** (Microsoft Learn) — [Link](https://learn.microsoft.com/en-us/credentials/certifications/azure-data-scientist)
                 * **The Ultimate MySQL Bootcamp** (Udemy) — [Link](https://www.udemy.com/course/the-ultimate-mysql-bootcamp-go-from-sql-beginner-to-expert/)
-                * **Machine Learning Specialization** (DeepLearning.AI) — [Link](https://www.coursera.org/specializations/machine-learning-introduction)
                 """)
-                
-            elif status == 200:
-                questions = res.get("questions", [])
-                skill = res.get("skill", "Python")
-                st.write(f"**Topic:** `{skill}` | **Attempts Left:** `{res.get('attempts_left')}`")
-                
-                if questions:
+        attempts, a_status = get_assessment_attempts_api()
+        user_attempts = [att for att in attempts if att.get("candidate_email") == profile.get("email")] if a_status == 200 else []
+        passed_attempts = [att for att in user_attempts if att.get("status") == "Passed"]
+        
+        if passed_attempts:
+            st.success("✔ Assessment Passed! You are now marked as **Deployment Ready** and are visible inside the Recruiter Portal.")
+        else:
+            attempts_left = 3 - len(user_attempts)
+            if attempts_left > 0:
+                ass_data, ass_status = get_assessment_api()
+                if ass_status == 200 and ass_data:
+                    st.caption(f"**Topic:** {ass_data.get('topic', 'Python')} | **Attempts Left:** {attempts_left}")
+                    
                     user_answers = {}
-                    for idx, q in enumerate(questions):
-                        st.write(f"**Q{idx+1}: {q['question']}** ({q['difficulty']})")
-                        ans = st.radio("Options:", q["options"], index=None, key=f"q_{q['_id']}")
-                        user_answers[q["_id"]] = ans
+                    for idx, q in enumerate(ass_data.get("questions", [])):
+                        q_id = str(q.get("_id") or q.get("id") or f"q_{idx}")
+                        st.markdown(f"**{q['question']}** ({q.get('difficulty', 'Medium')})")
+                        user_answers[q_id] = st.radio(
+                            "Options:",
+                            q["options"],
+                            key=f"mcq_{q_id}",
+                            index=None
+                        )
                         st.write("")
                         
-                    # Check if all questions are answered
-                    answered_all = all(user_answers.get(q["_id"]) is not None for q in questions)
-                    
-                    if st.button("Submit Assessment", use_container_width=True):
-                        if not answered_all:
-                            st.warning("⚠️ Please select an answer for all 5 questions before submitting!")
+                    if st.button("Submit Assessment", key="sub_mcq_btn", use_container_width=True):
+                        if None in user_answers.values():
+                            st.warning("Please answer all questions before submitting.")
                         else:
-                            with st.spinner("Grading..."):
-                                sub_res, sub_status = submit_assessment_api(user_answers)
-                                if sub_status == 200:
-                                    if sub_res["passed"]:
-                                        st.success(f"Passed! Score: {sub_res['score']}%")
+                            with st.spinner("Scoring assessment..."):
+                                payload = {
+                                    "assessment_id": ass_data.get("assessment_id"),
+                                    "answers": user_answers
+                                }
+                                res, stat = submit_assessment_api(payload)
+                                if stat == 200:
+                                    if res.get("status") == "Passed":
+                                        st.balloons()
+                                        st.success(f"🎉 Congratulations! You Passed with score {res.get('score')}%!")
                                     else:
-                                        st.error(f"Failed. Score: {sub_res['score']}% (Need 60%+)")
+                                        st.error(f"Assessment score: {res.get('score')}%. Passing score is 70%. You have {res.get('attempts_left')} attempts left.")
                                     st.rerun()
                                 else:
-                                    st.error(sub_res.get("error", "Error submitting."))
+                                    st.error(res.get("error", "Failed to submit assessment."))
                 else:
-                    st.write("No assessment questions loaded.")
+                    st.info("Assessment ready.")
             else:
-                st.error("Failed to load assessments.")
+                st.error("No assessment attempts remaining.")
         card_end()
         
         # E. Profile Editing (Collapsible container)
@@ -266,11 +278,11 @@ def show_professional_dashboard():
             domain_val = st.selectbox("Domain", DOMAINS, index=DOMAINS.index(profile.get("domain")) if profile.get("domain") in DOMAINS else 0, key="prof_edit_domain")
             experience_val = st.selectbox("Experience (Years)", [str(i) for i in range(11)], index=int(profile.get("experience", 0)) if int(profile.get("experience", 0)) <= 10 else 10, key="prof_edit_exp")
             
-            db_skills = get_skills_api()
-            if not db_skills:
-                db_skills = ["Python", "SQL", "Machine Learning", "Deep Learning", "Power BI", "Cybersecurity", "Java", "C++", "Docker", "AWS", "Git"]
-                
-            skills_sel = st.multiselect("Select Skills", db_skills, default=profile.get("skills", []), key="prof_edit_skills_sel")
+            db_skills = get_skills_api() or []
+            cand_skills = profile.get("skills", [])
+            all_skills_options = list(dict.fromkeys(db_skills + cand_skills + ["Python", "SQL", "Machine Learning", "Html5", "Css", "Figma Tool", "JavaScript", "React", "TypeScript", "UI/UX Design", "C++", "Java", "Docker", "AWS", "Git"]))
+            
+            skills_sel = st.multiselect("Select Skills", all_skills_options, default=cand_skills, key="prof_edit_skills_sel")
             skills_val = st.text_input("Skills List (Separate with commas, fully editable)", value=", ".join(skills_sel), key="prof_edit_skills_edit")
             
             langs_sel = st.multiselect("Spoken Languages", LANGUAGES, default=profile.get("spoken_languages", ["English"]), key="prof_edit_langs_sel")

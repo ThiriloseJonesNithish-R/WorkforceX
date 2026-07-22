@@ -122,19 +122,37 @@ def list_projects_api():
         return {"error": f"Connection error: {str(e)}"}, 500
 
 @st.cache_data(ttl=15, show_spinner=False)
-def get_project_matches_api(project_id):
+def get_project_matches_api(project_id, role_id=None):
     try:
-        res = requests.get(f"{API_URL}/project/{project_id}/matches", headers=get_headers())
+        params = {"role_id": role_id} if role_id else {}
+        res = requests.get(f"{API_URL}/project/{project_id}/matches", params=params, headers=get_headers())
         return res.json(), res.status_code
     except Exception as e:
         return {"error": f"Connection error: {str(e)}"}, 500
 
-def invite_candidate_api(project_id, candidate_email):
+def invite_candidate_api(project_id, candidate_email, role_id=None):
     try:
-        res = requests.post(f"{API_URL}/project/invite", json={
+        payload = {
             "project_id": project_id,
             "candidate_email": candidate_email
-        }, headers=get_headers())
+        }
+        if role_id:
+            payload["role_id"] = role_id
+        res = requests.post(f"{API_URL}/project/invite", json=payload, headers=get_headers())
+        st.cache_data.clear()
+        return res.json(), res.status_code
+    except Exception as e:
+        return {"error": f"Connection error: {str(e)}"}, 500
+
+def reject_candidate_api(project_id, candidate_email, role_id=None):
+    try:
+        payload = {
+            "project_id": project_id,
+            "candidate_email": candidate_email
+        }
+        if role_id:
+            payload["role_id"] = role_id
+        res = requests.post(f"{API_URL}/project/reject", json=payload, headers=get_headers())
         st.cache_data.clear()
         return res.json(), res.status_code
     except Exception as e:
@@ -157,11 +175,14 @@ def respond_invitation_api(invite_id, response):
     except Exception as e:
         return {"error": f"Connection error: {str(e)}"}, 500
 
-def hire_candidate_api(project_id, candidate_email):
+def hire_candidate_api(project_id, candidate_email, role_id=None):
     try:
-        res = requests.post(f"{API_URL}/project/{project_id}/hire", json={
+        payload = {
             "candidate_email": candidate_email
-        }, headers=get_headers())
+        }
+        if role_id:
+            payload["role_id"] = role_id
+        res = requests.post(f"{API_URL}/project/{project_id}/hire", json=payload, headers=get_headers())
         st.cache_data.clear()
         return res.json(), res.status_code
     except Exception as e:
