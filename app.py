@@ -89,11 +89,29 @@ def run_all():
         else:
             print("[Database] Local MongoDB is already running on port 27017.")
 
+        # Ensure environment variable points to local MongoDB for child processes
+        local_uri = "mongodb://127.0.0.1:27017"
+        os.environ["MONGO_URI"] = local_uri
+        try:
+            import pymongo
+            client = pymongo.MongoClient(local_uri, serverSelectionTimeoutMS=3000)
+            db = client["WorkForceX"]
+            prof_count = db["professionals"].count_documents({})
+            job_count = db["jobs"].count_documents({})
+            print(f"[Database] Connected to local MongoDB ({prof_count} professionals, {job_count} jobs found).")
+            if prof_count == 0 or job_count == 0:
+                print("[Database] Collections are empty. Running dataset loader...")
+                seeder_script = os.path.join(BASE_DIR, "mongodb_loader", "load_datasets.py")
+                subprocess.run([sys.executable, seeder_script], env=os.environ, check=True)
+                print("[Database] Seeding completed.")
+        except Exception as e:
+            print(f"[Database] Notice on local MongoDB check: {e}")
+
     # 2. Start Flask Backend API
     print("\n[Backend] Starting Flask REST API server on port 5000...")
     backend_script = os.path.join(BASE_DIR, "backend", "app.py")
     try:
-        backend_proc = subprocess.Popen([sys.executable, "-u", backend_script])
+        backend_proc = subprocess.Popen([sys.executable, "-u", backend_script], env=os.environ)
         processes.append(("Flask Backend", backend_proc))
     except Exception as e:
         print(f"[Backend] Failed to start Flask: {e}")
@@ -109,7 +127,7 @@ def run_all():
             sys.executable, "-m", "streamlit", "run", frontend_script, 
             "--server.port", "8501",
             "--server.headless", "true"
-        ])
+        ], env=os.environ)
         processes.append(("Streamlit Frontend", frontend_proc))
     except Exception as e:
         print(f"[Frontend] Failed to start Streamlit: {e}")

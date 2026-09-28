@@ -8,3 +8,7 @@ scikit-learn
 pyjwt
 bcrypt
 openpyxl
+requests
+streamlit
+altair
+groq

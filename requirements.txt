@@ -1,0 +1,2 @@
+# WorkForceX Platform Suite Dependencies
+-r backend/requirements.txt

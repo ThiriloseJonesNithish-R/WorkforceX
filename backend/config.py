@@ -12,7 +12,9 @@ def load_env():
                         continue
                     if "=" in line:
                         k, v = line.split("=", 1)
-                        os.environ[k.strip()] = v.strip()
+                        key = k.strip()
+                        if key not in os.environ:
+                            os.environ[key] = v.strip()
             break
         parent = os.path.dirname(current_dir)
         if parent == current_dir:
@@ -22,8 +24,8 @@ def load_env():
 load_env()
 
 class Config:
-    MONGO_URI = os.environ.get("MONGO_URI")
+    MONGO_URI = os.environ.get("MONGO_URI") or "mongodb://127.0.0.1:27017"
     DB_NAME = "WorkForceX"
-    JWT_SECRET = os.environ.get("JWT_SECRET")
+    JWT_SECRET = os.environ.get("JWT_SECRET") or "workforcex_secret_dev_key_2026"
     UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.abspath(os.path.join(os.path.dirname(__file__), "uploads")))
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB max upload size
